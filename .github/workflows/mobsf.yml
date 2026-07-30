@@ -36,6 +36,54 @@ jobs:
         uses: actions/checkout@v6
         with:
             lfs: true
+      - name: Materialize Git LFS files
+        shell: powershell
+        run: |
+            git lfs install --local --force
+            if ($LASTEXITCODE -ne 0) {
+              throw "git lfs install failed"
+            }
+
+            git lfs pull
+            if ($LASTEXITCODE -ne 0) {
+              throw "git lfs pull failed"
+            }
+
+            git lfs checkout
+            if ($LASTEXITCODE -ne 0) {
+              throw "git lfs checkout failed"
+            }
+
+            $wrapperJar = Join-Path `
+              $env:GITHUB_WORKSPACE `
+              "gradle\wrapper\gradle-wrapper.jar"
+
+            if (-not (Test-Path $wrapperJar)) {
+              throw "Gradle wrapper JAR not found: $wrapperJar"
+            }
+
+            $bytes = [System.IO.File]::ReadAllBytes($wrapperJar)
+            $size = $bytes.Length
+
+            Write-Host "gradle-wrapper.jar size: $size bytes"
+
+            # Un JAR es un ZIP y debe comenzar por PK.
+            if (
+              $size -lt 10000 -or
+              $bytes.Length -lt 2 -or
+              $bytes[0] -ne 0x50 -or
+              $bytes[1] -ne 0x4B
+            ) {
+              if ($size -lt 1000) {
+                $content = [Text.Encoding]::UTF8.GetString($bytes)
+                Write-Host "Wrapper content:"
+                Write-Host $content
+              }
+
+              throw "gradle-wrapper.jar is still a Git LFS pointer or is invalid"
+            }
+
+            Write-Host "Gradle wrapper JAR is valid"  
 
       - name: Detect Gradle version
         id: gradle
