@@ -1,0 +1,207 @@
+apply plugin: 'com.android.application'
+
+def getGitHash = providers.exec {
+    commandLine('git', 'rev-parse', '--short', 'HEAD')
+}.standardOutput.asText.get().strip()
+
+android {
+    buildToolsVersion = rootProject.ext.buildToolsVersion
+    namespace = 'org.runnerup'
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.toVersion("17")
+        targetCompatibility = JavaVersion.toVersion("17")
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src/main']
+            if (rootProject.ext.allowNonFree) {
+                java.srcDirs += ['src/play']
+            } else {
+                java.srcDirs += ['src/nonplay']
+            }
+            if (rootProject.ext.enableWear) {
+                java.srcDirs += ['src/wear']
+            } else {
+                java.srcDirs += ['src/nonwear']
+            }
+            if (rootProject.ext.noMap) {
+                java.srcDirs += ['src/nomap']
+            } else if (rootProject.ext.mapboxEnabled) {
+                java.srcDirs += ['src/mapbox']
+            } else {
+                java.srcDirs += ['src/osmdroid']
+            }
+            // renderscript.srcDirs = java.srcDirs
+            res.srcDirs = ['res']
+            assets.srcDirs = ['assets']
+        }
+        test.setRoot('test')
+    }
+
+    flavorDimensions = [ "all" ]
+    productFlavors {
+        latest {
+            dimension = "all"
+            // multidexing support, min play support
+            minSdk = rootProject.ext.minSdk
+            compileSdk = rootProject.ext.compileSdk
+            targetSdk = rootProject.ext.targetSdk
+            versionName = rootProject.ext.versionName
+            versionCode = rootProject.ext.latestBaseVersionCode + rootProject.ext.versionCode
+        }
+    }
+
+    defaultConfig {
+        // Set a separate applicationId to allow variant installations
+        // The applicationId is also used in some xml files (android:targetPackage)
+        // The packageId (in the manifest) is never changed
+        // See also applicationIdFull in common/build.gradle, must be in sync
+        applicationId = rootProject.ext.applicationId
+        vectorDrawables.useSupportLibrary = true
+    }
+
+    signingConfigs {
+        release {
+        }
+    }
+
+    buildTypes {
+        debug {
+            // Separate the debug build, sync with common/build.gradle
+            applicationIdSuffix ".debug"
+            versionNameSuffix = "-${getGitHash}"
+        }
+        release {
+            debuggable = false
+            applicationIdSuffix = ""
+
+            minifyEnabled = rootProject.ext.allowNonFree
+            shrinkResources = rootProject.ext.allowNonFree
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard.txt'
+            signingConfig = signingConfigs.release
+        }
+    }
+    buildTypes.configureEach {
+        buildConfigField 'boolean', 'MAPBOX_ENABLED', "${rootProject.ext.mapboxEnabled}"
+        buildConfigField 'String', 'MAPBOX_ACCESS_TOKEN', "\"${rootProject.ext.mapboxAccessToken}\""
+        buildConfigField 'boolean', 'OSMDROID_ENABLED', "${rootProject.ext.osmdroidEnabled}"
+
+        buildConfigField 'boolean', 'RUNALYZE_ENABLED', "${rootProject.ext.runalyzeEnabled}"
+        buildConfigField 'String', 'RUNALYZE_ID', "\"${rootProject.ext.runalyzeId}\""
+        buildConfigField 'String', 'RUNALYZE_SECRET', "\"${rootProject.ext.runalyzeSecret}\""
+
+        buildConfigField 'boolean', 'DROPBOX_ENABLED', "${rootProject.ext.dropboxEnabled}"
+        buildConfigField 'String', 'DROPBOX_ID', "\"${rootProject.ext.dropboxId}\""
+        buildConfigField 'String', 'DROPBOX_SECRET', "\"${rootProject.ext.dropboxSecret}\""
+    }
+    lint {
+        baseline = file('lint-baseline.xml')
+        checkReleaseBuilds = true
+        if (mapboxEnabled) {
+            lintConfig = file('lint.xml')
+        } else {
+            lintConfig = file('lint-osmdroid.xml')
+        }
+        showAll = true
+        //textOutput = 'stdout'
+        textReport = true
+        // Treat all warnings as errors
+        warningsAsErrors = true
+        // Halt the build if any errors are found
+        abortOnError = true
+    }
+    bundle {
+        language {
+            // Language can be set for audio cues, include all locales
+            enableSplit = false
+        }
+    }
+    buildFeatures {
+        aidl = true
+        buildConfig = true
+        resValues = true
+    }
+    androidResources {
+        generateLocaleConfig = true
+    }
+}
+
+repositories {
+    google()
+    mavenCentral() //MapBox GraphView
+    if (rootProject.ext.mapboxEnabled) {
+        maven {
+            url = 'https://api.mapbox.com/downloads/v2/releases/maven'
+            authentication {
+                basic(BasicAuthentication)
+            }
+            credentials {
+                // Do not change the username below.
+                // This should always be `mapbox` (not your username).
+                username = 'mapbox'
+                // Use the secret token you stored in gradle.properties as the password
+                def props = new Properties()
+                props.load(new FileInputStream(rootProject.file("mapbox.properties")))
+                password = props.mapboxDownloadToken
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation project(':common')
+    implementation project(':hrdevice')
+
+    implementation "androidx.annotation:annotation:${rootProject.ext.annotation_version}"
+    implementation "androidx.appcompat:appcompat:${rootProject.ext.appcompat_version}"
+    implementation "androidx.preference:preference:${rootProject.ext.preference_version}"
+    implementation "androidx.viewpager2:viewpager2:1.1.0"
+    implementation "androidx.constraintlayout:constraintlayout:2.2.1"
+    implementation "androidx.core:core-location-altitude:1.0.0-beta01"
+
+    latestImplementation "com.google.android.material:material:1.13.0"
+    if (rootProject.ext.enableWear) {
+        latestImplementation "com.google.android.gms:play-services-wearable:${rootProject.ext.googlePlayServicesWearableVersion}"
+    }
+
+    implementation "com.squareup.okhttp3:okhttp:5.3.2"
+    if (rootProject.ext.allowNonFree) {
+        // MapBox uses telemetry, without Play there may be exceptions from mapbox (OK to ignore)
+        latestImplementation "com.google.android.gms:play-services-location:${rootProject.ext.googlePlayServicesVersion}"
+    }
+    if (rootProject.ext.mapboxEnabled) {
+        latestImplementation 'com.mapbox.maps:android-ndk27:11.17.1'
+    } else {
+        implementation 'org.osmdroid:osmdroid-android:6.1.20'
+    }
+    latestImplementation 'com.jjoe64:graphview:4.2.2'
+
+    testImplementation "junit:junit:${rootProject.ext.junitVersion}"
+    testImplementation "org.mockito:mockito-core:${rootProject.ext.mockitoVersion}"
+}
+
+allprojects {
+    tasks.withType(JavaCompile).tap {
+        configureEach {
+            // options.compilerArgs << "-Xlint:deprecation";
+            options.compilerArgs << "-Xlint:unchecked"
+        }
+    }
+}
+
+def props = new Properties()
+// For locally signed builds only, Google Play signs the bundle
+if (rootProject.file("release.properties").exists()) {
+    props.load(new FileInputStream(rootProject.file("release.properties")))
+
+    android.signingConfigs.release.storeFile rootProject.file(props.keyStore)
+    android.signingConfigs.release.storePassword props.keyStorePassword
+    android.signingConfigs.release.keyAlias props.keyAlias
+    android.signingConfigs.release.keyPassword props.keyAliasPassword
+} else {
+    project.logger.info('INFO: Set the values storeFile, storePassword, keyAlias, and keyPassword in release.properties to sign the release.')
+    android.buildTypes.release.signingConfig = null
+}

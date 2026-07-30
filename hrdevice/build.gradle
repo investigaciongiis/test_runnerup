@@ -1,0 +1,69 @@
+apply plugin: 'com.android.library'
+
+group = "org.runnerup.hr"
+version = "1.0"
+
+android {
+    namespace = 'org.runnerup.hr'
+    compileSdk = rootProject.ext.compileSdk
+    buildToolsVersion = rootProject.ext.buildToolsVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.toVersion("17")
+        targetCompatibility = JavaVersion.toVersion("17")
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src']
+            resources.srcDirs = ['src']
+            aidl.srcDirs = ['src']
+            // renderscript.srcDirs = ['src']
+            res.srcDirs = ['res']
+            assets.srcDirs = ['assets']
+        }
+    }
+    lint {
+        baseline = file('lint-baseline.xml')
+        checkReleaseBuilds = true
+        //lintConfig = file('lint.xml')
+        showAll = true
+        //textOutput = 'stdout'
+        textReport = true
+        // Treat all warnings as errors
+        warningsAsErrors = true
+        // Halt the build if any errors are found
+        abortOnError = true
+    }
+    defaultConfig {
+        minSdk = rootProject.ext.minSdk
+        targetSdk = rootProject.ext.targetSdk
+
+        if (rootProject.ext.antPlusLibName) {
+            buildConfigField 'Boolean', 'ANTPLUS_ENABLED', "true"
+        } else {
+            android.sourceSets.main.java.excludes = ['org/runnerup/hr/AntPlus.java']
+            buildConfigField 'Boolean', 'ANTPLUS_ENABLED', "false"
+        }
+    }
+    buildFeatures {
+        resValues = true
+        aidl = true
+        buildConfig = true
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    implementation "androidx.appcompat:appcompat:${rootProject.ext.appcompat_version}"
+    implementation "androidx.preference:preference:${rootProject.ext.preference_version}"
+
+    if (rootProject.ext.antPlusLibName) {
+        implementation(name: rootProject.ext.antPlusLibName, ext: 'aar')
+    }
+}

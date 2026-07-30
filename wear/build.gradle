@@ -1,0 +1,89 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace = 'org.runnerup'
+    compileSdk = rootProject.ext.compileSdk
+    buildToolsVersion = rootProject.ext.buildToolsVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.toVersion("17")
+        targetCompatibility = JavaVersion.toVersion("17")
+    }
+
+    defaultConfig {
+        minSdk = 25
+        targetSdk = rootProject.ext.targetSdk
+        versionName = rootProject.ext.versionName
+        versionCode = rootProject.ext.latestBaseVersionCode + rootProject.ext.versionCode + 1
+        applicationId = rootProject.ext.applicationId
+    }
+
+    signingConfigs {
+        //noinspection GroovyMissingReturnStatement
+        release {
+        }
+    }
+
+    buildTypes {
+        release {
+            debuggable = false
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard.txt'
+            signingConfig = signingConfigs.release
+        }
+        debug {
+            applicationIdSuffix = ".debug"
+        }
+    }
+    lint {
+        baseline = file('lint-baseline.xml')
+        checkReleaseBuilds = true
+        lintConfig = file('lint.xml')
+        showAll = true
+        //textOutput = 'stdout'
+        textReport = true
+        // Treat all warnings as errors
+        warningsAsErrors = true
+        // Halt the build if any errors are found
+        abortOnError = true
+    }
+    namespace = 'org.runnerup'
+    buildFeatures {
+        buildConfig = true
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':common')
+
+    implementation "androidx.annotation:annotation:${rootProject.ext.annotation_version}"
+
+    implementation "com.google.android.support:wearable:${rootProject.ext.googleWearVersion}"
+    compileOnly "com.google.android.wearable:wearable:${rootProject.ext.googleWearVersion}"
+
+    implementation "com.google.android.gms:play-services-wearable:${rootProject.ext.googlePlayServicesWearableVersion}"
+
+    implementation "androidx.wear:wear:1.3.0"
+    implementation "androidx.wear:wear-ongoing:1.1.0"
+    // Includes LocusIdCompat and new Notification categories for Ongoing Activity.
+    implementation "androidx.core:core:1.17.0"
+}
+
+def props = new Properties()
+if (rootProject.file("release.properties").exists()) {
+    props.load(new FileInputStream(rootProject.file("release.properties")))
+
+    android.signingConfigs.release.storeFile = rootProject.file(props.keyStore)
+    android.signingConfigs.release.storePassword = props.keyStorePassword
+    android.signingConfigs.release.keyAlias = props.keyAlias
+    android.signingConfigs.release.keyPassword = props.keyAliasPassword
+} else {
+    project.logger.info('INFO: Set the values storeFile, storePassword, keyAlias, and keyPassword in release.properties to sign the release.')
+    android.buildTypes.release.signingConfig = null
+}
